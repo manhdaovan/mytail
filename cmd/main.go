@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	// NOTE: change this import path if necessary
 	"github.com/manhdaovan/mytail/pkg/mytail"
 )
 
