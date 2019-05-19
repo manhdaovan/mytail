@@ -40,14 +40,32 @@ func parseArgs() cmdArgs {
 func main() {
 	args := parseArgs()
 	err := args.validate()
-	dieIf(err)
+	if err != nil {
+		printHelp(err)
+		return
+	}
 
 	err = mytail.Tail(args.filePaths, args.numLine)
-	dieIf(err)
+	if err != nil {
+		printHelp(err)
+	}
 }
 
 func dieIf(err error) {
 	if err != nil {
 		log.Fatalln(err)
 	}
+}
+
+func printHelp(err error) {
+	help := `
+usage: ./mytail [-n number] file [file2...]
+
+The options are as follows:
+    -n number: Number lines will be tailed.
+`
+	if err != nil {
+		fmt.Printf("Error: %+v\n", err)
+	}
+	fmt.Print(help)
 }
