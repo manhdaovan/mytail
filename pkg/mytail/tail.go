@@ -1,28 +1,31 @@
-package solutions
+package mytail
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sync"
 )
 
+// Tail prints the last lines of the files to stdout
 func Tail(filePaths []string, numLine uint64) error {
-	maxBufSize := int64(20 << 20) // 20MB
-	if tailFiles, err := tailFiles(filePaths, numLine, maxBufSize); err != nil {
+	defaultBufSize := int64(20 << 20) // 20MB
+	out := os.Stdout
+	err := tailFiles(filePaths, numLine, defaultBufSize, out)
+	if err != nil {
 		return err
-	} else {
-		printTail(tailFiles)
-		return nil
 	}
+
+	return nil
 }
 
-func tailFiles(filePaths []string, numLine uint64, maxBufSize int64) (tailedFiles, error) {
+func tailFiles(filePaths []string, numLine uint64, defaultBufSize int64, out io.Writer) error {
 	resultChan := make(chan tailedFile, len(filePaths))
 	errChan := make(chan error, len(filePaths))
 	var wg sync.WaitGroup
 	wg.Add(len(filePaths))
 	for i, fp := range filePaths {
-		go func(filePath string, displayOrder int) {
+		go func(filePath string, printOrder int) {
 			defer wg.Done()
 			file, err := os.Open(filePath)
 			if err != nil {
@@ -35,7 +38,7 @@ func tailFiles(filePaths []string, numLine uint64, maxBufSize int64) (tailedFile
 					errChan <- err
 				}
 			}()
-			if tf, err := tail(file, numLine, maxBufSize, displayOrder); err != nil {
+			if tf, err := tail(file, numLine, defaultBufSize, printOrder); err != nil {
 				errChan <- err
 			} else {
 				resultChan <- tf
@@ -48,7 +51,7 @@ func tailFiles(filePaths []string, numLine uint64, maxBufSize int64) (tailedFile
 
 	for err := range errChan {
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -57,10 +60,36 @@ func tailFiles(filePaths []string, numLine uint64, maxBufSize int64) (tailedFile
 		tfs[tf.order] = tf
 	}
 
-	return tfs, nil
+	return printTailedFiles(tfs, out)
 }
 
-func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFile, error) {
+func printTailedFiles(tfs []tailedFile, out io.Writer) error {
+	printFileName := len(tfs) > 1
+	for _, tf := range tfs {
+		if printFileName {
+			if tf.order > 0 {
+				// From 2nd file,
+				// print new line before print file name
+				if _, err := fmt.Fprint(out, "\n"); err != nil {
+					return err
+				}
+			}
+			if _, err := fmt.Fprint(out, "==> ", tf.name, " <==\n"); err != nil {
+				return err
+			}
+		}
+
+		for i := len(tf.lines) - 1; i >= 0; i-- {
+			if _, err := fmt.Fprint(out, string(tf.lines[i])); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func tail(file *os.File, numLine uint64, defaultBufSize int64, order int) (tailedFile, error) {
 	tf := tailedFile{
 		name:  file.Name(),
 		order: order,
@@ -76,10 +105,10 @@ func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFil
 		return tf, nil
 	}
 
-	var bufSize = maxBufSize
+	var bufSize = defaultBufSize
 	var startLineIdx, endLineIdx int
 
-	if fSize < maxBufSize {
+	if fSize < defaultBufSize {
 		bufSize = fSize
 	}
 	chunks := fSize / bufSize
@@ -88,7 +117,6 @@ func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFil
 		chunks++
 	}
 
-	fmt.Println("chunks ---- ", chunks)
 	remainingNumBytes := int64(0)
 	readBytes := make([]byte, 0)
 	foundEOF := 0
@@ -111,10 +139,6 @@ func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFil
 		}
 
 		endLineIdx = readNumBytes
-		if c == int64(1) { // set startLineIdx = endLineIdx in first chunk
-			startLineIdx = endLineIdx
-		}
-
 		foundEOF = 0
 		for i := readNumBytes - 1; i >= 0 && numLine > 0; i-- {
 			if readBytes[i] == '\n' { // EOL
@@ -129,6 +153,8 @@ func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFil
 			}
 			startLineIdx = i
 		}
+		// keep tracking on remaining bytes in current chunk
+		// then add to bufSize on reading next chunk
 		remainingNumBytes = int64(endLineIdx)
 	}
 
@@ -139,18 +165,9 @@ func tail(file *os.File, numLine uint64, maxBufSize int64, order int) (tailedFil
 	return tf, nil
 }
 
-func printTail(tfs tailedFiles) {
-	for _, tf := range tfs {
-		for i := len(tf.lines) - 1; i >= 0; i-- {
-			fmt.Print(string(tf.lines[i]))
-		}
-	}
-}
-
 type line []byte
 type tailedFile struct {
 	name  string
 	order int
 	lines []line
 }
-type tailedFiles []tailedFile

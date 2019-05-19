@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/manhdaovan/mytail/solutions"
+	"github.com/manhdaovan/mytail/pkg/mytail"
 )
 
 type cmdArgs struct {
@@ -42,7 +42,7 @@ func main() {
 	err := args.validate()
 	dieIf(err)
 
-	err = solutions.Tail(args.filePaths, args.numLine)
+	err = mytail.Tail(args.filePaths, args.numLine)
 	dieIf(err)
 }
 
