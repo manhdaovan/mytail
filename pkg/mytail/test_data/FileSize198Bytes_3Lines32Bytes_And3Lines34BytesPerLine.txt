@@ -1,0 +1,6 @@
+0,20Lines_32And34BytesPerLine,0
+1,20Lines_32And34BytesPerLine,1
+2,20Lines_32And34BytesPerLine,2
+10,20Lines_32And34BytesPerLine,10
+11,20Lines_32And34BytesPerLine,11
+12,20Lines_32And34BytesPerLine,12
